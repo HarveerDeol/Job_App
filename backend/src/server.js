@@ -15,8 +15,6 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 const allowedOrigins = [
-  "http://localhost:3000",
-  "http://172.27.224.1:3000",
   process.env.FRONTEND_URL, 
 ].filter(Boolean);
 

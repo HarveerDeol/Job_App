@@ -15,6 +15,7 @@ type Job = {
 };
 
 
+const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL
 
 export default function JobDetailPage() {
     const router = useRouter();
@@ -23,7 +24,7 @@ export default function JobDetailPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`http://localhost:3001/api/jobs/${params.jobID}`)
+    fetch(`${BASE_URL}/api/jobs/${params.jobID}`)
       .then((res) => res.json())
       .then((data) => {
         setJob(data);

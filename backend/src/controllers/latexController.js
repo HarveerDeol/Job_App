@@ -1,5 +1,6 @@
-const FormData = require('form-data');
-const fetch = require('node-fetch');
+const latex = require('node-latex');
+const fs = require('fs');
+const path = require('path');
 
 const compileLatex = async (req, res) => {
   try {
@@ -12,28 +13,55 @@ const compileLatex = async (req, res) => {
       });
     }
 
-    const form = new FormData();
-    form.append('file', Buffer.from(latexSource), {
-      filename: 'document.tex',
-      contentType: 'text/plain'
-    });
+    // Method 1: Try LaTeX.Online with correct endpoint
+    try {
+      const formData = new FormData();
+      formData.append('file', new Blob([latexSource], { type: 'text/plain' }), 'document.tex');
+      
+      const response = await fetch('https://latexonline.cc/compile?command=pdflatex', {
+        method: 'POST',
+        body: formData
+      });
 
-    const response = await fetch('https://latexonline.cc/compile?command=pdflatex', {
-      method: 'POST',
-      body: form,
-      headers: form.getHeaders()
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`LaTeX compilation failed: ${errorText}`);
+      if (response.ok) {
+        const pdfBuffer = await response.arrayBuffer();
+        
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'inline; filename=resume.pdf');
+        return res.send(Buffer.from(pdfBuffer));
+      }
+    } catch (e) {
+      console.log('LaTeX.Online failed, trying alternative...');
     }
 
-    const pdfBuffer = await response.arrayBuffer();
-    
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'inline; filename=resume.pdf');
-    res.send(Buffer.from(pdfBuffer));
+    // Method 2: Try Texlive.net API
+    try {
+      const response = await fetch('https://texlive.net/cgi-bin/latexcgi', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          filecontents: latexSource,
+          filename: 'document.tex',
+          engine: 'pdflatex',
+          return: 'pdf'
+        })
+      });
+
+      if (response.ok) {
+        const pdfBuffer = await response.arrayBuffer();
+        
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'inline; filename=resume.pdf');
+        return res.send(Buffer.from(pdfBuffer));
+      }
+    } catch (e) {
+      console.log('Texlive.net failed');
+    }
+
+    // If all methods fail
+    throw new Error('All LaTeX compilation services are unavailable');
 
   } catch (error) {
     console.error('LaTeX compilation error:', error);

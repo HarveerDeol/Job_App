@@ -1,8 +1,6 @@
-const latex = require('node-latex');
-const fs = require('fs');
-const path = require('path');
+const FormData = require('form-data');
+const fetch = require('node-fetch');
 
-// Using LaTeX.Online API (free, no auth required)
 const compileLatex = async (req, res) => {
   try {
     const { latex: latexSource } = req.body;
@@ -14,20 +12,21 @@ const compileLatex = async (req, res) => {
       });
     }
 
-    // Send to LaTeX.Online API
-    const response = await fetch('https://latexonline.cc/compile', {
+    const form = new FormData();
+    form.append('file', Buffer.from(latexSource), {
+      filename: 'document.tex',
+      contentType: 'text/plain'
+    });
+
+    const response = await fetch('https://latexonline.cc/compile?command=pdflatex', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        text: latexSource,
-        command: 'pdflatex'
-      })
+      body: form,
+      headers: form.getHeaders()
     });
 
     if (!response.ok) {
-      throw new Error(`LaTeX compilation failed: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`LaTeX compilation failed: ${errorText}`);
     }
 
     const pdfBuffer = await response.arrayBuffer();
@@ -46,6 +45,4 @@ const compileLatex = async (req, res) => {
   }
 };
 
-module.exports = {
-  compileLatex
-};
+module.exports = { compileLatex };

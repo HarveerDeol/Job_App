@@ -1,6 +1,4 @@
-const latex = require('node-latex');
-const fs = require('fs');
-const path = require('path');
+const fetch = require('node-fetch'); // Make sure to install: npm install node-fetch@2
 
 const compileLatex = async (req, res) => {
   try {
@@ -13,75 +11,63 @@ const compileLatex = async (req, res) => {
       });
     }
 
-    // Create a buffer to collect the PDF data
-    const chunks = [];
-    let errorOutput = '';
-
-    // Compile LaTeX to PDF
-    const output = latex(latexSource, {
-      cmd: 'pdflatex',
-      passes: 2,
+    // Use LaTeX.Online API for compilation
+    const response = await fetch('https://latex.ytotech.com/builds/sync', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        compiler: 'pdflatex',
+        resources: [
+          {
+            main: true,
+            file: 'main.tex',
+            content: latexSource
+          }
+        ]
+      })
     });
 
-    output.on('data', (chunk) => {
-      chunks.push(chunk);
-    });
-
-    output.on('end', () => {
-      const pdfBuffer = Buffer.concat(chunks);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('LaTeX compilation error:', errorText);
       
-      // Set headers for PDF response
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', 'inline; filename=resume.pdf');
-      res.setHeader('Content-Length', pdfBuffer.length);
-      
-      res.send(pdfBuffer);
-    });
-
-    output.on('error', (err) => {
-      console.error('LaTeX compilation error:', err);
-      
-      // Parse error message for better user feedback
-      let userFriendlyMessage = 'Failed to compile LaTeX';
-      let errorDetails = err.message;
-      
-      if (err.message.includes('Undefined control sequence')) {
-        userFriendlyMessage = 'LaTeX syntax error: Undefined command found';
-        const match = err.message.match(/\\(\w+)/);
-        if (match) {
-          errorDetails = `The command \\${match[1]} is not recognized. Check for typos or missing packages.`;
-        }
-      } else if (err.message.includes('Missing \\begin{document}')) {
-        userFriendlyMessage = 'Missing \\begin{document} command';
-        errorDetails = 'Your LaTeX document must include \\begin{document} before the content.';
-      } else if (err.message.includes('File') && err.message.includes('not found')) {
-        userFriendlyMessage = 'Missing LaTeX package';
-        errorDetails = 'A required LaTeX package is not installed. Please check your document packages.';
-      } else if (err.message.includes('! LaTeX Error')) {
-        userFriendlyMessage = 'LaTeX compilation error';
-        const match = err.message.match(/! LaTeX Error: (.+)/);
-        if (match) {
-          errorDetails = match[1];
-        }
-      } else if (err.message.includes('Emergency stop')) {
-        userFriendlyMessage = 'Critical LaTeX error';
-        errorDetails = 'The LaTeX compiler encountered a critical error. Please check your syntax.';
-      }
-      
-      res.status(422).json({
+      return res.status(422).json({
         success: false,
-        message: userFriendlyMessage,
-        error: errorDetails,
-        fullError: err.message
+        message: 'Failed to compile LaTeX',
+        error: 'The LaTeX compilation service returned an error',
+        fullError: errorText
       });
-    });
+    }
+
+    // Get the PDF buffer
+    const pdfBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(pdfBuffer);
+    
+    // Set headers for PDF response
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename=resume.pdf');
+    res.setHeader('Content-Length', buffer.length);
+    
+    res.send(buffer);
 
   } catch (error) {
     console.error('LaTeX compilation error:', error);
+    
+    let userFriendlyMessage = 'Failed to compile LaTeX';
+    let errorDetails = error.message;
+    
+    if (error.message.includes('fetch')) {
+      userFriendlyMessage = 'Unable to reach LaTeX compilation service';
+      errorDetails = 'Please check your internet connection and try again.';
+    }
+    
     res.status(500).json({
       success: false,
-      message: 'Internal server error during LaTeX compilation',
-      error: error.message
+      message: userFriendlyMessage,
+      error: errorDetails,
+      fullError: error.message
     });
   }
 };

@@ -1,4 +1,4 @@
-const fetch = require('node-fetch'); // Make sure to install: npm install node-fetch@2
+import fetch from 'node-fetch';
 
 const compileLatex = async (req, res) => {
   try {
@@ -11,67 +11,42 @@ const compileLatex = async (req, res) => {
       });
     }
 
-    // Use LaTeX.Online API for compilation
-    const response = await fetch('https://latex.ytotech.com/builds/sync', {
+    // Send LaTeX to latexonline.cc API
+    const response = await fetch('https://latexonline.cc/compile', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'text/plain'
       },
-      body: JSON.stringify({
-        compiler: 'pdflatex',
-        resources: [
-          {
-            main: true,
-            file: 'main.tex',
-            content: latexSource
-          }
-        ]
-      })
+      body: latexSource
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('LaTeX compilation error:', errorText);
-      
+      const text = await response.text();
       return res.status(422).json({
         success: false,
         message: 'Failed to compile LaTeX',
-        error: 'The LaTeX compilation service returned an error',
-        fullError: errorText
+        error: text
       });
     }
 
-    // Get the PDF buffer
-    const pdfBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(pdfBuffer);
-    
-    // Set headers for PDF response
+    // Get the PDF as ArrayBuffer
+    const arrayBuffer = await response.arrayBuffer();
+    const pdfBuffer = Buffer.from(arrayBuffer);
+
+    // Send PDF back to frontend
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename=resume.pdf');
-    res.setHeader('Content-Length', buffer.length);
-    
-    res.send(buffer);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.send(pdfBuffer);
 
-  } catch (error) {
-    console.error('LaTeX compilation error:', error);
-    
-    let userFriendlyMessage = 'Failed to compile LaTeX';
-    let errorDetails = error.message;
-    
-    if (error.message.includes('fetch')) {
-      userFriendlyMessage = 'Unable to reach LaTeX compilation service';
-      errorDetails = 'Please check your internet connection and try again.';
-    }
-    
+  } catch (err) {
+    console.error('LaTeX compilation error:', err);
     res.status(500).json({
       success: false,
-      message: userFriendlyMessage,
-      error: errorDetails,
-      fullError: error.message
+      message: 'Internal server error during LaTeX compilation',
+      error: err.message
     });
   }
 };
 
-module.exports = {
-  compileLatex
-};
+export default compileLatex;

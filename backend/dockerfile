@@ -1,0 +1,28 @@
+FROM node:18-slim
+
+# Install TeX Live and required packages
+RUN apt-get update && apt-get install -y \
+    texlive-latex-base \
+    texlive-latex-extra \
+    texlive-fonts-recommended \
+    texlive-fonts-extra \
+    texlive-xetex \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /src
+
+# Copy package files
+COPY package*.json ./
+
+# Install Node dependencies
+RUN npm install --production
+
+# Copy application files
+COPY . .
+
+# Expose port (App Runner uses PORT env variable)
+EXPOSE 3001
+
+# Start the application
+CMD ["node", "server.js"]

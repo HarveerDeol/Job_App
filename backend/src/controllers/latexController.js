@@ -13,64 +13,79 @@ const compileLatex = async (req, res) => {
       });
     }
 
-    // Method 1: Try LaTeX.Online with correct endpoint
-    try {
-      const formData = new FormData();
-      formData.append('file', new Blob([latexSource], { type: 'text/plain' }), 'document.tex');
+    // Create a buffer to collect the PDF data
+    const chunks = [];
+    let errorOutput = '';
+
+    // Compile LaTeX to PDF
+    const output = latex(latexSource, {
+      cmd: 'pdflatex',
+      passes: 2,
+    });
+
+    output.on('data', (chunk) => {
+      chunks.push(chunk);
+    });
+
+    output.on('end', () => {
+      const pdfBuffer = Buffer.concat(chunks);
       
-      const response = await fetch('https://latexonline.cc/compile?command=pdflatex', {
-        method: 'POST',
-        body: formData
-      });
+      // Set headers for PDF response
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline; filename=resume.pdf');
+      res.setHeader('Content-Length', pdfBuffer.length);
+      
+      res.send(pdfBuffer);
+    });
 
-      if (response.ok) {
-        const pdfBuffer = await response.arrayBuffer();
-        
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'inline; filename=resume.pdf');
-        return res.send(Buffer.from(pdfBuffer));
+    output.on('error', (err) => {
+      console.error('LaTeX compilation error:', err);
+      
+      // Parse error message for better user feedback
+      let userFriendlyMessage = 'Failed to compile LaTeX';
+      let errorDetails = err.message;
+      
+      if (err.message.includes('Undefined control sequence')) {
+        userFriendlyMessage = 'LaTeX syntax error: Undefined command found';
+        const match = err.message.match(/\\(\w+)/);
+        if (match) {
+          errorDetails = `The command \\${match[1]} is not recognized. Check for typos or missing packages.`;
+        }
+      } else if (err.message.includes('Missing \\begin{document}')) {
+        userFriendlyMessage = 'Missing \\begin{document} command';
+        errorDetails = 'Your LaTeX document must include \\begin{document} before the content.';
+      } else if (err.message.includes('File') && err.message.includes('not found')) {
+        userFriendlyMessage = 'Missing LaTeX package';
+        errorDetails = 'A required LaTeX package is not installed. Please check your document packages.';
+      } else if (err.message.includes('! LaTeX Error')) {
+        userFriendlyMessage = 'LaTeX compilation error';
+        const match = err.message.match(/! LaTeX Error: (.+)/);
+        if (match) {
+          errorDetails = match[1];
+        }
+      } else if (err.message.includes('Emergency stop')) {
+        userFriendlyMessage = 'Critical LaTeX error';
+        errorDetails = 'The LaTeX compiler encountered a critical error. Please check your syntax.';
       }
-    } catch (e) {
-      console.log('LaTeX.Online failed, trying alternative...');
-    }
-
-    // Method 2: Try Texlive.net API
-    try {
-      const response = await fetch('https://texlive.net/cgi-bin/latexcgi', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          filecontents: latexSource,
-          filename: 'document.tex',
-          engine: 'pdflatex',
-          return: 'pdf'
-        })
+      
+      res.status(422).json({
+        success: false,
+        message: userFriendlyMessage,
+        error: errorDetails,
+        fullError: err.message
       });
-
-      if (response.ok) {
-        const pdfBuffer = await response.arrayBuffer();
-        
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'inline; filename=resume.pdf');
-        return res.send(Buffer.from(pdfBuffer));
-      }
-    } catch (e) {
-      console.log('Texlive.net failed');
-    }
-
-    // If all methods fail
-    throw new Error('All LaTeX compilation services are unavailable');
+    });
 
   } catch (error) {
     console.error('LaTeX compilation error:', error);
-    res.status(422).json({
+    res.status(500).json({
       success: false,
-      message: 'Failed to compile LaTeX',
+      message: 'Internal server error during LaTeX compilation',
       error: error.message
     });
   }
 };
 
-module.exports = { compileLatex };
+module.exports = {
+  compileLatex
+};

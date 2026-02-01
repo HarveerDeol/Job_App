@@ -15,14 +15,11 @@ const llmRoutes = require('./routes/llmRoutes.js');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// More permissive CORS for Vercel
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (mobile apps, curl, etc.)
       if (!origin) return callback(null, true);
-      
-      // Allow all Vercel deployments and localhost
+
       const allowedPatterns = [
         /^https:\/\/job-app-frontend.*\.vercel\.app$/,
         /^http:\/\/localhost:\d+$/,

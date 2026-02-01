@@ -1,28 +1,40 @@
-FROM node:18-slim
+# Use official Node.js LTS image
+FROM node:18-alpine
 
-# Install TeX Live and required packages
-RUN apt-get update && apt-get install -y \
-    texlive-latex-base \
-    texlive-latex-extra \
-    texlive-fonts-recommended \
-    texlive-fonts-extra \
-    texlive-xetex \
-    && rm -rf /var/lib/apt/lists/*
+# Install dependencies for Puppeteer (since you have puppeteur routes)
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
 
-# Set working directory
-WORKDIR /src
+# Tell Puppeteer to use installed Chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Create app directory
+WORKDIR /usr/src/app
 
 # Copy package files
 COPY package*.json ./
 
-# Install Node dependencies
-RUN npm install --production
+# Install dependencies
+RUN npm ci --only=production
 
-# Copy application files
+# Copy app source
 COPY . .
 
-# Expose port (App Runner uses PORT env variable)
+# Expose port (make sure this matches your PORT env var)
 EXPOSE 3001
 
+# Create a non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001 && \
+    chown -R nodejs:nodejs /usr/src/app
+
+USER nodejs
+
 # Start the application
-CMD ["node", "server.js"]
+CMD ["node", "index.js"]

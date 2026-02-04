@@ -20,11 +20,13 @@ app.use(
     origin: function (origin, callback) {
       if (!origin) return callback(null, true);
 
-      const allowedPatterns = [
-        /^https:\/\/job-app-frontend.*\.vercel\.app$/,
-        /^http:\/\/localhost:\d+$/,
-        /^http:\/\/127\.0\.0\.1:\d+$/
-      ];
+     const allowedPatterns = [
+      /^https:\/\/job-app-frontend.*\.vercel\.app$/,
+      /^http:\/\/localhost:\d+$/,
+      /^http:\/\/127\.0\.0\.1:\d+$/,
+      /^https:\/\/job-app-harveer\.xyz$/ 
+    ];
+
       
       const isAllowed = allowedPatterns.some(pattern => pattern.test(origin));
       

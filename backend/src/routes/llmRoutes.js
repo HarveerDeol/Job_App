@@ -38,8 +38,6 @@ const parser = StructuredOutputParser.fromZodSchema(resumeTailorSchema);
 const llm = new ChatGroq({
   apiKey: process.env.GROQ_API_KEY,
   model: "llama-3.3-70b-versatile",
-  temperature: 0.3,
-  maxTokens: 2000
 });
 
 /* =========================
@@ -57,6 +55,13 @@ STRICT OUTPUT RULES:
 - Do NOT wrap output in code fences
 - Output MUST match the provided schema exactly
 
+TASK:
+You are given an existing resume in LaTeX and a job description.
+Your job is to **only reword, reorder, or emphasize existing resume content** to make it more tailored to the job description.
+- Do NOT add new work experience, education, or sections.
+- Do NOT copy text from the job description into the resume.
+- Make improvements by highlighting relevant skills, keywords, and achievements already present.
+
 Job Title:
 {{job_title}}
 
@@ -67,6 +72,7 @@ Original Resume (LaTeX):
 {{resume_tex}}
 
 {{format_instructions}}
+
   `,
   inputVariables: [
     "job_title",
@@ -90,7 +96,6 @@ router.post("/", async (req, res) => {
   }
 
   try {
-
     const chain = resumeTailorPrompt
       .pipe(llm)
       .pipe(parser);
@@ -113,7 +118,17 @@ router.post("/", async (req, res) => {
     });
 
   } catch (err) {
-    console.error(" Resume tailoring error:", err);
+    console.error("Resume tailoring error:", err);
+    
+    // Check if it's a parsing error with available output
+    if (err.lc_error_code === 'OUTPUT_PARSING_FAILURE' && err.llmOutput) {
+      return res.status(500).json({
+        error: "output_truncated",
+        details: "LLM response exceeded token limit. Increase maxTokens.",
+        partial_output: err.llmOutput.substring(0, 500) // Preview
+      });
+    }
+    
     res.status(500).json({
       error: "resume_tailoring_failed",
       details: err.message

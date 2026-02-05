@@ -15,7 +15,6 @@ export default function MasterResumePage() {
   const [pdfUrl, setPdfUrl] = useState(null);
   const [isCompiling, setIsCompiling] = useState(false);
   const [compilationError, setCompilationError] = useState(null);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const [contactInfo, setContactInfo] = useState({
     fullName: "",
@@ -162,6 +161,7 @@ ${bullets || '  \\resumeItem{Add your accomplishments and responsibilities here}
   };
 
   const generateLatex = () => {
+    // Use the professional template instead of simple one
     return getDefaultLatexTemplate();
   };
 
@@ -184,6 +184,7 @@ ${bullets || '  \\resumeItem{Add your accomplishments and responsibilities here}
 
       const blob = await res.blob();
       
+      // Revoke old URL if it exists
       if (pdfUrl) {
         URL.revokeObjectURL(pdfUrl);
       }
@@ -213,22 +214,13 @@ ${bullets || '  \\resumeItem{Add your accomplishments and responsibilities here}
     }
   };
 
-  // Track form changes
   useEffect(() => {
     if (editMode === "form") {
       const newLatex = generateLatex();
       setLatexSource(newLatex);
-      setHasUnsavedChanges(true);
     }
-  }, [contactInfo, summary, experiences, education, skills]);
+  }, [contactInfo, summary, experiences, education, skills, editMode]);
 
-  // Track LaTeX changes
-  const handleLatexChange = (newLatex) => {
-    setLatexSource(newLatex);
-    setHasUnsavedChanges(true);
-  };
-
-  // Compile PDF when LaTeX changes
   useEffect(() => {
     const timer = setTimeout(() => {
       if (latexSource) {
@@ -238,45 +230,6 @@ ${bullets || '  \\resumeItem{Add your accomplishments and responsibilities here}
 
     return () => clearTimeout(timer);
   }, [latexSource]);
-
-  // Handle mode switching with confirmation
-  const handleModeSwitch = (newMode) => {
-    if (hasUnsavedChanges && editMode !== newMode) {
-      const confirmSwitch = window.confirm(
-        "You have unsaved changes. Switching modes will regenerate the content. Do you want to save first?"
-      );
-      
-      if (confirmSwitch) {
-        handleSave().then(() => {
-          setEditMode(newMode);
-          setHasUnsavedChanges(false);
-          
-          // Regenerate LaTeX from form data when switching to LaTeX mode
-          if (newMode === "latex") {
-            const newLatex = generateLatex();
-            setLatexSource(newLatex);
-          }
-        });
-      } else {
-        // Switch without saving
-        setEditMode(newMode);
-        
-        // Regenerate LaTeX from form data when switching to LaTeX mode
-        if (newMode === "latex") {
-          const newLatex = generateLatex();
-          setLatexSource(newLatex);
-        }
-      }
-    } else {
-      setEditMode(newMode);
-      
-      // Regenerate LaTeX from form data when switching to LaTeX mode
-      if (newMode === "latex") {
-        const newLatex = generateLatex();
-        setLatexSource(newLatex);
-      }
-    }
-  };
 
   const addExperience = () => {
     setExperiences([...experiences, { company: "", title: "", startDate: "", endDate: "", description: "" }]);
@@ -415,7 +368,6 @@ ${bullets || '  \\resumeItem{Add your accomplishments and responsibilities here}
         }
 
         setResumeId(result.data?.id);
-        setHasUnsavedChanges(false);
       } catch (err) {
         console.error(err);
       }
@@ -441,7 +393,7 @@ ${bullets || '  \\resumeItem{Add your accomplishments and responsibilities here}
         experiences,
         education,
         skills,
-        latexSource // Always save the current LaTeX source
+        latexSource
       },
       is_master: true
     };
@@ -461,7 +413,6 @@ ${bullets || '  \\resumeItem{Add your accomplishments and responsibilities here}
       
       const result = await response.json();
       setResumeId(result.data?.id);
-      setHasUnsavedChanges(false);
       alert('Resume saved successfully!');
     } catch (error) {
       console.error('Error saving resume:', error);
@@ -531,14 +482,7 @@ ${bullets || '  \\resumeItem{Add your accomplishments and responsibilities here}
       )}
 
       <section className="mx-auto max-w-7xl px-6 py-8">
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="font-serif text-5xl">Master Resume</h1>
-          {hasUnsavedChanges && (
-            <Badge variant="destructive" className="animate-pulse">
-              Unsaved Changes
-            </Badge>
-          )}
-        </div>
+        <h1 className="text-center font-serif text-5xl mb-2">Master Resume</h1>
         <p className="text-center text-sm text-gray-600 mb-4">
           Build your master resume once, then customize it for each job application
         </p>
@@ -547,7 +491,7 @@ ${bullets || '  \\resumeItem{Add your accomplishments and responsibilities here}
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => handleModeSwitch("form")}
+            onClick={() => setEditMode("form")}
             className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-colors ${
               editMode === "form" 
                 ? "bg-black text-white" 
@@ -559,7 +503,7 @@ ${bullets || '  \\resumeItem{Add your accomplishments and responsibilities here}
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => handleModeSwitch("latex")}
+            onClick={() => setEditMode("latex")}
             className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-colors ${
               editMode === "latex" 
                 ? "bg-black text-white" 
@@ -603,7 +547,7 @@ ${bullets || '  \\resumeItem{Add your accomplishments and responsibilities here}
                 <h2 className="text-lg font-semibold mb-4">LaTeX Source</h2>
                 <textarea
                   value={latexSource}
-                  onChange={(e) => handleLatexChange(e.target.value)}
+                  onChange={(e) => setLatexSource(e.target.value)}
                   className="w-full h-[calc(100vh-350px)] rounded-md border border-gray-300 px-4 py-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-pink-500"
                   spellCheck={false}
                 />
@@ -835,13 +779,9 @@ ${bullets || '  \\resumeItem{Add your accomplishments and responsibilities here}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleSave}
-              className={`w-full flex items-center justify-center gap-2 rounded-xl px-6 py-4 text-sm font-semibold text-white shadow-lg ${
-                hasUnsavedChanges 
-                  ? "bg-black hover:opacity-90 animate-pulse" 
-                  : "bg-gray-400"
-              }`}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-black px-6 py-4 text-sm font-semibold text-white hover:opacity-90 shadow-lg"
             >
-              <Save size={18} /> {hasUnsavedChanges ? "Save Changes" : "Saved"}
+              <Save size={18} /> Save Master Resume
             </motion.button>
           </div>
 
